@@ -1,0 +1,6 @@
+{
+    "presets": [
+        [ "@babel/preset-env", { "targets": { "esmodules": true } } ], // Es el nombre de la biblioteca que instalaste
+        [ "@babel/preset-react", { "runtime": "automatic" } ] // Es el nombre de la biblioteca que instalaste
+    ]
+}
