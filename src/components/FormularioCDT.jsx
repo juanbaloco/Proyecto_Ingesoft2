@@ -1,250 +1,193 @@
-import { useState, useEffect } from "react";
+// src/components/FormularioCDT.jsx
+import { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { clearSolicitudActual } from "../store/slices/cdtSlice";
 import { crearSolicitudCDT, actualizarSolicitudCDT } from "../store/thunks/cdtThunk";
 
 export const FormularioCDT = () => {
   const dispatch = useDispatch();
-  const { uid, displayName } = useSelector((state) => state.auth);
-  const { solicitudActual, status, error } = useSelector((state) => state.cdt);
+  const navigate = useNavigate();
+  const { solicitudActual, error } = useSelector((s) => s.cdt);
+  const { uid, displayName } = useSelector((s) => s.auth);
 
-  const plazoOpciones = [
-    { dias: 90, tasa: 6.5, label: "90 días" },
-    { dias: 180, tasa: 8, label: "180 días" },
-    { dias: 360, tasa: 12, label: "360 días" },
+  const productos = [{ id: "tradicional", label: "CDT Tradicional" }];
+
+  const plazosMes = [
+    { meses: 6, label: "6 meses", tasa: 11.0 },
+    { meses: 12, label: "12 meses", tasa: 12.5 },
+    { meses: 18, label: "18 meses", tasa: 12.8 },
+    { meses: 24, label: "24 meses", tasa: 13.2 },
   ];
 
-  const [formState, setFormState] = useState({
-    monto: "",
-    plazo: "",
-    tasaInteres: "",
-  });
-
-  const [validationErrors, setValidationErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState("");
-
-  const { monto, plazo, tasaInteres } = formState;
+  const [form, setForm] = useState({ producto: "", monto: "", plazo: "", tasaInteres: "" });
+  const [ok, setOk] = useState("");
 
   useEffect(() => {
     if (solicitudActual) {
-      setFormState({
-        monto: solicitudActual.monto.toString(),
-        plazo: solicitudActual.plazo.toString(),
-        tasaInteres: solicitudActual.tasaInteres.toString(),
+      setForm({
+        producto: "tradicional",
+        monto: String(solicitudActual.monto || ""),
+        plazo: Number(solicitudActual.plazo) || "",
+        tasaInteres: solicitudActual.tasaInteres,
       });
+    } else {
+      setForm({ producto: "", monto: "", plazo: "", tasaInteres: "" });
     }
   }, [solicitudActual]);
 
-  const onInputChange = (evt) => {
-    const { name, value } = evt.target;
-    
+  const onChange = (e) => {
+    const { name, value } = e.target;
     if (name === "plazo") {
-      const opcionSeleccionada = plazoOpciones.find(
-        (op) => op.dias.toString() === value
-      );
-      setFormState({
-        ...formState,
-        plazo: value,
-        tasaInteres: opcionSeleccionada ? opcionSeleccionada.tasa.toString() : "",
-      });
+      const p = plazosMes.find((x) => x.meses === Number(value));
+      setForm((f) => ({ ...f, plazo: Number(value), tasaInteres: p?.tasa ?? "" }));
     } else {
-      setFormState({
-        ...formState,
-        [name]: value,
-      });
-    }
-    
-    if (validationErrors[name]) {
-      setValidationErrors({
-        ...validationErrors,
-        [name]: "",
-      });
+      setForm((f) => ({ ...f, [name]: name === "monto" ? value.replace(/\D/g, "") : value }));
     }
   };
 
-  const validateForm = () => {
-    const errors = {};
+  const formatCOP = (v) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(Number(v || 0));
 
-    const montoNum = parseFloat(monto);
-    if (!monto || isNaN(montoNum)) {
-      errors.monto = "El monto es requerido";
-    } else if (montoNum <= 0) {
-      errors.monto = "El monto debe ser mayor a 0";
-    } else if (montoNum < 250000) {
-      errors.monto = "El monto mínimo es $250,000 COP";
-    } else if (montoNum > 500000000) {
-      errors.monto = "El monto máximo es $500,000,000 COP";
-    }
+  const resumen = useMemo(() => {
+    const monto = Number(form.monto || 0);
+    const EAR = Number(form.tasaInteres || 0) / 100;
+    const dias = Math.round((Number(form.plazo || 0) / 12) * 365);
+    const r = Math.pow(1 + EAR, dias / 365) - 1;
+    const intereses = monto * r;
+    return { intereses, total: monto + intereses };
+  }, [form.monto, form.plazo, form.tasaInteres]);
 
-    if (!plazo) {
-      errors.plazo = "Debes seleccionar un plazo";
-    } else {
-      const plazoValido = plazoOpciones.some(
-        (op) => op.dias.toString() === plazo
-      );
-      if (!plazoValido) {
-        errors.plazo = "Plazo no válido";
-      }
-    }
-
-    if (!tasaInteres) {
-      errors.tasaInteres = "La tasa de interés debe estar asignada";
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+  const validar = () => {
+    const m = Number(form.monto || 0);
+    if (!uid) return "Usuario no autenticado";
+    if (!form.producto) return "Seleccione un producto";
+    if (!m || m < 250000 || m > 500000000) return "Monto entre $250.000 y $500.000.000";
+    if (!form.plazo) return "Seleccione un plazo";
+    return null;
   };
 
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    setSuccessMessage("");
+    setOk("");
+    const v = validar();
+    if (v) return alert(v);
 
-    if (!validateForm()) {
-      return;
-    }
-    
-    if (solicitudActual) {
-      // Actualizar solicitud existente en Firestore
-      const resultado = await dispatch(actualizarSolicitudCDT(
-        solicitudActual.id,
-        {
-          monto: parseFloat(monto),
-          plazo: parseInt(plazo),
-          tasaInteres: parseFloat(tasaInteres),
-        }
-      ));
-      
-      if (resultado.success) {
-        setSuccessMessage("Solicitud actualizada exitosamente");
-      } else {
-        setSuccessMessage("Error al actualizar la solicitud");
-      }
+    const data = {
+      monto: Number(form.monto),
+      plazo: Number(form.plazo),
+      tasaInteres: Number(form.tasaInteres),
+      estado: solicitudActual?.estado || "Borrador",
+      displayName,
+    };
+
+    const res = solicitudActual
+      ? await dispatch(actualizarSolicitudCDT({ id: solicitudActual.id, cambios: data }))
+      : await dispatch(crearSolicitudCDT(data));
+
+    if (res?.success) {
+      setOk(solicitudActual ? "Solicitud actualizada" : "Solicitud creada");
+      setTimeout(() => {
+        setOk("");
+        dispatch(clearSolicitudActual());
+        navigate("/dashboard");
+      }, 800);
     } else {
-      const resultado = await dispatch(crearSolicitudCDT({
-        monto: parseFloat(monto),
-        plazo: parseInt(plazo),
-        tasaInteres: parseFloat(tasaInteres),
-        userId: uid,
-        displayName,
-        estado: "PENDIENTE",
-      }));
-      
-      if (resultado.success) {
-        setSuccessMessage("Solicitud creada exitosamente");
-      } else {
-        setSuccessMessage("Error al crear la solicitud");
-      }
-    }
-
-    resetForm();
-    setTimeout(() => setSuccessMessage(""), 3000);
-  };
-
-  const resetForm = () => {
-    setFormState({
-      monto: "",
-      plazo: "",
-      tasaInteres: "",
-    });
-    setValidationErrors({});
-    if (solicitudActual) {
-      dispatch(clearSolicitudActual());
+      alert(res?.error || "Ocurrió un error");
     }
   };
 
-  const handleCancel = () => {
-    resetForm();
+  const onCancel = () => {
+    dispatch(clearSolicitudActual());
+    navigate("/dashboard");
   };
 
   return (
     <div className="formulario-cdt-container">
-      <form onSubmit={handleSubmit} className="formulario-cdt-form">
+      <form onSubmit={onSubmit} className="formulario-cdt-form">
+        {/* Producto */}
         <div className="formulario-cdt-form-group">
-          <label htmlFor="monto" className="formulario-cdt-label">
-            Monto (COP)
-          </label>
-          <input
-            id="monto"
-            name="monto"
-            type="number"
-            placeholder="Ej: 5000000"
-            value={monto}
-            onChange={onInputChange}
-            className={`formulario-cdt-input ${validationErrors.monto ? "formulario-cdt-input-error" : ""}`}
-            min="250000"
-            max="500000000"
-            step="1"
-          />
-          {validationErrors.monto && (
-            <span className="formulario-cdt-error-text">{validationErrors.monto}</span>
-          )}
-          <small style={{ fontSize: "12px", color: "#7f8c8d" }}>
-            Mínimo: $250,000 - Máximo: $500,000,000
-          </small>
-        </div>
-
-        <div className="formulario-cdt-form-group">
-          <label htmlFor="plazo" className="formulario-cdt-label">
-            Plazo de Inversión
-          </label>
-          <select
-            id="plazo"
-            name="plazo"
-            value={plazo}
-            onChange={onInputChange}
-            className={`formulario-cdt-select ${validationErrors.plazo ? "formulario-cdt-input-error" : ""}`}
-          >
-            <option value="">Selecciona un plazo</option>
-            {plazoOpciones.map((opcion) => (
-              <option key={opcion.dias} value={opcion.dias}>
-                {opcion.label}
-              </option>
+          <label className="formulario-cdt-label">Producto</label>
+          <select className="formulario-cdt-select" name="producto" value={form.producto} onChange={onChange} required>
+            <option value="">Seleccione un producto</option>
+            {productos.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
-          {validationErrors.plazo && (
-            <span className="formulario-cdt-error-text">{validationErrors.plazo}</span>
-          )}
-          <small style={{ fontSize: "12px", color: "#7f8c8d" }}>
-            La tasa de interés se asigna automáticamente según el plazo
-          </small>
         </div>
 
+        {/* Monto */}
         <div className="formulario-cdt-form-group">
-          <label htmlFor="tasaInteres" className="formulario-cdt-label">
-            Tasa de Rendimiento Efectivo Anual
-          </label>
-          <div style={{
-            padding: "12px",
-            fontSize: "18px",
-            fontWeight: "600",
-            color: "#27ae60",
-            backgroundColor: "#e8f8f5",
-            borderRadius: "4px",
-            textAlign: "center",
-            border: "2px solid #27ae60"
-          }}>
-            {tasaInteres ? `${tasaInteres}% Efectivo Anual` : "Selecciona un plazo primero"}
+          <label className="formulario-cdt-label">Monto (COP)</label>
+          <input
+            className="formulario-cdt-input"
+            name="monto"
+            value={form.monto}
+            onChange={onChange}
+            placeholder="10.000.000"
+            inputMode="numeric"
+          />
+          <small className="formulario-cdt-info-text">Rango permitido: $250.000 a $500.000.000</small>
+        </div>
+
+        {/* Plazo */}
+        <div className="formulario-cdt-form-group">
+          <label className="formulario-cdt-label">Plazo (meses)</label>
+          <select className="formulario-cdt-select" name="plazo" value={form.plazo} onChange={onChange} required>
+            <option value="">Seleccione plazo</option>
+            {plazosMes.map((p) => (
+              <option key={p.meses} value={p.meses}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Info */}
+        <div className="formulario-cdt-info-box">
+          La tasa E.A. se asigna automáticamente según el plazo seleccionado.
+        </div>
+
+        {/* Resumen */}
+        <div className="dashboard-section-title" style={{ border: "none", padding: 0, marginTop: 10 }}>
+          Resumen y Confirmación
+        </div>
+
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          <div className="dashboard-section">
+            <div className="formulario-cdt-info-title">Monto solicitado</div>
+            <div style={{ fontWeight: 800 }}>{formatCOP(form.monto)}</div>
+          </div>
+
+          <div className="dashboard-section">
+            <div className="formulario-cdt-info-title">Tasa de interés</div>
+            <div style={{ fontWeight: 800 }}>{form.tasaInteres ? `${form.tasaInteres}% E.A.` : "-"}</div>
+          </div>
+
+          <div className="dashboard-section">
+            <div className="formulario-cdt-info-title">Intereses estimados</div>
+            <div style={{ fontWeight: 800, color: "#16A34A" }}>{formatCOP(resumen.intereses)}</div>
+          </div>
+
+          <div className="dashboard-section">
+            <div className="formulario-cdt-info-title">Plazo</div>
+            <div style={{ fontWeight: 800 }}>{form.plazo ? `${form.plazo} meses` : "-"}</div>
+          </div>
+
+          <div className="dashboard-section">
+            <div className="formulario-cdt-info-title">Total al vencimiento</div>
+            <div style={{ fontWeight: 800 }}>{formatCOP(resumen.total)}</div>
           </div>
         </div>
 
-        {error && <div className="formulario-cdt-error-message">{error}</div>}
-        {successMessage && (
-          <div className="formulario-cdt-success-message">{successMessage}</div>
-        )}
+        {/* Mensajes */}
+        {error && <div className="formulario-cdt-error-message" style={{ marginTop: 10 }}>{error}</div>}
+        {ok && <div className="formulario-cdt-success-message" style={{ marginTop: 10 }}>{ok}</div>}
 
+        {/* Botones */}
         <div className="formulario-cdt-button-group">
+          <button type="button" className="formulario-cdt-cancel-button" onClick={onCancel}>Cancelar</button>
           <button type="submit" className="formulario-cdt-submit-button">
-            {solicitudActual ? "Actualizar Solicitud" : "Crear Solicitud"}
+            {solicitudActual ? "Guardar cambios" : "Guardar solicitud"}
           </button>
-          {solicitudActual && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="formulario-cdt-cancel-button"
-            >
-              Cancelar
-            </button>
-          )}
         </div>
       </form>
     </div>
