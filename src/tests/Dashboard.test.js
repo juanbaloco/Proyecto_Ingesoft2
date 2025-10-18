@@ -28,7 +28,6 @@ jest.mock('../components/FormularioCDT', () => ({
   FormularioCDT: () => <div>FormularioCDT Mock</div>,
 }));
 
-
 describe('Dashboard Component - handleLogout', () => {
   const mockDispatch = jest.fn();
 
