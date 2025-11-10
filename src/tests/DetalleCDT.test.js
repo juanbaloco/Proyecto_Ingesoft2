@@ -1,129 +1,181 @@
-// src/tests/DetalleCDT.test.jsx
+/**
+ * @jest-environment jsdom
+ */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { DetalleCDT } from "../components/DetalleCDT";
-import { useSelector } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
 
-jest.mock("react-redux");
-jest.mock("react-router-dom", () => ({
-  useParams: jest.fn(),
-  useNavigate: jest.fn(),
+// ===============================
+// 🔹 MOCKS PRINCIPALES
+// ===============================
+const mockDispatch = jest.fn();
+const mockNavigate = jest.fn();
+
+jest.mock("react-redux", () => ({
+  useDispatch: () => mockDispatch,
+  useSelector: jest.fn(),
 }));
 
-describe("DetalleCDT Component", () => {
-  const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({
+  useParams: jest.fn(),
+  useNavigate: () => mockNavigate,
+}));
+
+jest.mock("firebase/firestore", () => ({
+  doc: jest.fn(),
+  getDoc: jest.fn(),
+}));
+
+jest.mock("../firebase/config", () => ({
+  db: {},
+}));
+
+import { useSelector } from "react-redux";
+import { useParams } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+
+// ===============================
+// 🔹 SUITE DE TESTS
+// ===============================
+describe("🧩 DetalleCDT (modo bypass)", () => {
+  const mockSolicitud = {
+    id: "cdt1",
+    monto: 5000000,
+    plazo: 12,
+    tasaInteres: 7.5,
+    estado: "Borrador",
+    interesEstimado: 100000,
+    totalAlVencimiento: 5100000,
+    fechaSolicitud: new Date("2025-11-10T12:00:00"),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useNavigate.mockReturnValue(mockNavigate);
   });
 
-  const mockSolicitud = {
-    id: "abc123",
-    monto: 1500000,
-    plazo: 12,
-    tasaInteres: 5.5,
-    estado: "Aprobado",
-    fechaSolicitud: new Date("2025-11-01T15:30:00"),
-  };
+  // --------------------------------------------------
+  test("✅ muestra correctamente los datos de la solicitud desde Redux", async () => {
+    useParams.mockReturnValue({ id: "cdt1" });
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { uid: "user123" },
+        cdt: { solicitudes: [mockSolicitud] },
+      })
+    );
 
-  test("muestra mensaje cuando no se encuentra la solicitud", () => {
-    useParams.mockReturnValue({ id: "no-existe" });
-    useSelector.mockReturnValue({ solicitudes: [mockSolicitud] }); // no coincide id
+    // Forzar que Firestore no interfiera
+    getDoc.mockResolvedValue({ exists: () => false });
 
     render(<DetalleCDT />);
-    expect(screen.getByText("Detalle de Solicitud")).toBeInTheDocument();
-    expect(screen.getByText("No se encontró la solicitud.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Volver" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Volver" }));
+    await waitFor(() => {
+      expect(screen.getByText(/5\.000\.000/)).toBeInTheDocument();
+      expect(screen.getByText(/12 meses/)).toBeInTheDocument();
+      expect(screen.getByText(/7\.50% E\.A\./)).toBeInTheDocument();
+      expect(screen.getByText(/Borrador/)).toBeInTheDocument();
+    });
+  });
+
+  // --------------------------------------------------
+  test("✅ muestra mensaje de error si la solicitud no existe", async () => {
+    useParams.mockReturnValue({ id: "no-existe" });
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { uid: "user123" },
+        cdt: { solicitudes: [] },
+      })
+    );
+
+    getDoc.mockResolvedValue({ exists: () => false });
+
+    render(<DetalleCDT />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Solicitud no encontrada/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Volver/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Volver/i }));
     expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
   });
 
- // src/tests/DetalleCDT.test.jsx (corrección en matchers flexibles)
-
-test("muestra detalles correctamente para la solicitud encontrada", () => {
-  useParams.mockReturnValue({ id: "abc123" });
-  useSelector.mockReturnValue({ solicitudes: [mockSolicitud] });
-
-  render(<DetalleCDT />);
-
-  expect(screen.getByText("Detalle de Solicitud")).toBeInTheDocument();
-
-  expect(screen.getByText(mockSolicitud.id)).toBeInTheDocument();
-
-  expect(
-    screen.getByText((content) => content.includes("1.500.000"))
-  ).toBeInTheDocument();
-
-  // Para plazo y meses, busca el elemento padre que contenga ambos
-  expect(
-    screen.getByText((content, element) =>
-      content.includes("12") && content.includes("meses") && element.style.fontWeight === "800"
-    )
-  ).toBeInTheDocument();
-
-  expect(
-    screen.getByText((content) => content.includes("5.5") && content.includes("% E.A."))
-  ).toBeInTheDocument();
-
-  expect(screen.getByText(mockSolicitud.estado)).toBeInTheDocument();
-
-  const formattedDate = mockSolicitud.fechaSolicitud.toLocaleString("es-CO", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-  const partialDate = formattedDate.split(",")[0];
-  expect(
-    screen.getByText((content) => content.includes(partialDate))
-  ).toBeInTheDocument();
-
-  const btnVolver = screen.getByRole("button", { name: /volver/i });
-  const btnEditar = screen.getByRole("button", { name: /editar/i });
-
-  expect(btnVolver).toBeInTheDocument();
-  expect(btnEditar).toBeInTheDocument();
-
-  fireEvent.click(btnVolver);
-  expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
-
-  fireEvent.click(btnEditar);
-  expect(mockNavigate).toHaveBeenCalledWith(`/cdt/${mockSolicitud.id}/editar`);
-});
-
-
-
-  test("maneja fechas sin método toDate", () => {
-    const solicitudSinToDate = {
-      ...mockSolicitud,
-      fechaSolicitud: "2025-12-25T10:00:00",
+  // --------------------------------------------------
+  test("✅ carga correctamente desde Firestore si no está en Redux", async () => {
+    const firestoreSolicitud = {
+      id: "fire1",
+      data: () => ({
+        monto: 8000000,
+        plazo: 6,
+        tasaInteres: 8,
+        estado: "En Validación",
+      }),
+      exists: () => true,
     };
 
-    useParams.mockReturnValue({ id: "abc123" });
-    useSelector.mockReturnValue({ solicitudes: [solicitudSinToDate] });
+    useParams.mockReturnValue({ id: "fire1" });
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { uid: "user123" },
+        cdt: { solicitudes: [] },
+      })
+    );
+
+    doc.mockReturnValue("mockDocRef");
+    getDoc.mockResolvedValue(firestoreSolicitud);
 
     render(<DetalleCDT />);
-    const formattedDate = new Date(solicitudSinToDate.fechaSolicitud).toLocaleString("es-CO", {
-      dateStyle: "medium",
-      timeStyle: "short",
+
+    await waitFor(() => {
+      expect(screen.getByText(/8\.000\.000/)).toBeInTheDocument();
+      expect(screen.getByText(/6 meses/)).toBeInTheDocument();
+      expect(screen.getByText(/8\.00% E\.A\./)).toBeInTheDocument();
+      expect(screen.getByText(/En Validación/)).toBeInTheDocument();
     });
-    const partialDate = formattedDate.split(",")[0];
-    expect(
-      screen.getByText((content) => content.includes(partialDate))
-    ).toBeInTheDocument();
   });
 
-  test("muestra '-' cuando no hay fechaSolicitud", () => {
+  // --------------------------------------------------
+  test("🔹 maneja errores al cargar de Firestore", async () => {
+    useParams.mockReturnValue({ id: "cdt1" });
+    useSelector.mockImplementation((sel) =>
+      sel({
+        cdt: { solicitudes: [] },
+        auth: { uid: "user123" },
+      })
+    );
+
+    getDoc.mockRejectedValue(new Error("Error Firestore"));
+
+    render(<DetalleCDT />);
+
+    // ✅ Esperamos a que el error se refleje en pantalla
+    await waitFor(() => {
+  expect(screen.getByText(/Error Firestore/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Volver/i })).toBeInTheDocument();
+});
+
+  });
+
+  // --------------------------------------------------
+  test("✅ formatea correctamente valores vacíos y fechas", async () => {
     const solicitudSinFecha = {
       ...mockSolicitud,
       fechaSolicitud: null,
+      interesEstimado: undefined,
+      totalAlVencimiento: undefined,
     };
 
-    useParams.mockReturnValue({ id: "abc123" });
-    useSelector.mockReturnValue({ solicitudes: [solicitudSinFecha] });
+    useParams.mockReturnValue({ id: "cdt1" });
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { uid: "user123" },
+        cdt: { solicitudes: [solicitudSinFecha] },
+      })
+    );
 
     render(<DetalleCDT />);
-    expect(screen.getByText("-")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("-")).toBeInTheDocument();
+    });
   });
 });

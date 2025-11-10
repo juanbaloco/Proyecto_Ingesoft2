@@ -1,69 +1,124 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { Dashboard } from '../components/Dashboard';
-import { logoutAuth } from '../store/thunks/logout';
-import { clearCdtState } from '../store/slices/cdtSlice';
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { Dashboard } from "../components/Dashboard";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { logoutAuth } from "../store/thunks/logout";
+import { clearCdtState } from "../store/slices/cdtSlice";
+import { cargarSolicitudesCDT } from "../store/thunks/cdtThunk";
 
-
-jest.mock('react-redux', () => ({
+// 🧩 Mocks
+jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
   useSelector: jest.fn(),
 }));
-jest.mock('react-router-dom', () => ({
+
+jest.mock("react-router-dom", () => ({
   useNavigate: jest.fn(),
 }));
-jest.mock('../store/thunks/logout', () => ({
-  logoutAuth: jest.fn(() => ({ type: 'auth/logoutAuth' })),
-}));
-jest.mock('../store/slices/cdtSlice', () => ({
-  clearCdtState: jest.fn(() => ({ type: 'cdt/clearCdtState' })),
+
+jest.mock("../store/thunks/logout", () => ({
+  logoutAuth: jest.fn(() => ({ type: "logoutAuth" })),
 }));
 
-jest.mock('../components/ListaCDT', () => ({
-  ListaCDT: () => <div>ListaCDT Mock</div>,
-}));
-jest.mock('../components/FormularioCDT', () => ({
-  FormularioCDT: () => <div>FormularioCDT Mock</div>,
+jest.mock("../store/thunks/cdtThunk", () => ({
+  cargarSolicitudesCDT: jest.fn((uid) => ({ type: "cargarSolicitudesCDT", payload: uid })),
 }));
 
-describe('Dashboard Component - handleLogout', () => {
+jest.mock("../store/slices/cdtSlice", () => ({
+  clearCdtState: jest.fn(() => ({ type: "clearCdtState" })),
+}));
+
+jest.mock("../components/FormularioCDT", () => ({
+  FormularioCDT: () => <div data-testid="formulario">FormularioCDT</div>,
+}));
+
+jest.mock("../components/ListaCDT", () => ({
+  ListaCDT: () => <div data-testid="lista">ListaCDT</div>,
+}));
+
+jest.mock("../components/Footer", () => ({
+  Footer: () => <div data-testid="footer">Footer</div>,
+}));
+
+describe("Dashboard Component", () => {
   const mockDispatch = jest.fn();
+  const mockNavigate = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-
     useDispatch.mockReturnValue(mockDispatch);
-
-    useNavigate.mockReturnValue(jest.fn());
-
-    useSelector.mockImplementation((selector) => selector({
-      auth: { status: 'authenticated', displayName: 'Test User', uid: '123' },
-      cdt: { solicitudes: [{}, {}] },
-    }));
+    useNavigate.mockReturnValue(mockNavigate);
   });
 
-  test('handleLogout debe despachar clearCdtState y luego logoutAuth', () => {
+  test("🔹 redirige a /login si no está autenticado", () => {
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { status: "not-authenticated", role: "user" },
+        cdt: { solicitudes: [] },
+      })
+    );
+
+    render(<Dashboard />);
+    expect(mockNavigate).toHaveBeenCalledWith("/login");
+  });
+
+  test("🔹 redirige a /admin/dashboard si el rol es admin", () => {
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { status: "authenticated", role: "admin", uid: "123" },
+        cdt: { solicitudes: [] },
+      })
+    );
+
+    render(<Dashboard />);
+    expect(mockNavigate).toHaveBeenCalledWith("/admin/dashboard");
+  });
+
+  test("🔹 carga solicitudes si autenticado como usuario normal", () => {
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { status: "authenticated", displayName: "Juan", uid: "u1", role: "user" },
+        cdt: { solicitudes: [{ id: 1 }, { id: 2 }] },
+      })
+    );
+
     render(<Dashboard />);
 
-    const logoutButton = screen.getByRole('button', { name: /Cerrar Sesión/i });
-    fireEvent.click(logoutButton);
+    expect(mockDispatch).toHaveBeenCalledWith(cargarSolicitudesCDT("u1"));
+    expect(screen.getByText("NeoBank - NeoCDT")).toBeInTheDocument();
+    expect(screen.getByText("Juan")).toBeInTheDocument();
+    expect(screen.getByTestId("formulario")).toBeInTheDocument();
+    expect(screen.getByTestId("lista")).toBeInTheDocument();
+    expect(screen.getByTestId("footer")).toBeInTheDocument();
+  });
 
-    expect(clearCdtState).toHaveBeenCalledTimes(1);
-    
-    expect(logoutAuth).toHaveBeenCalledTimes(1);
+  test("🔹 no renderiza nada si no está autenticado o es admin", () => {
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { status: "checking", role: "user" },
+        cdt: { solicitudes: [] },
+      })
+    );
 
-    expect(mockDispatch).toHaveBeenCalledTimes(2);
+    const { container } = render(<Dashboard />);
+    expect(container.firstChild).toBeNull();
+  });
 
-    const clearAction = clearCdtState();
-    const logoutAction = logoutAuth();
+  test("🔹 ejecuta logout y limpia el estado al hacer clic", () => {
+    useSelector.mockImplementation((selector) =>
+      selector({
+        auth: { status: "authenticated", displayName: "Carlos", uid: "abc", role: "user" },
+        cdt: { solicitudes: [] },
+      })
+    );
 
-    expect(mockDispatch).toHaveBeenCalledWith(clearAction);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(logoutAction);
-    
-    expect(mockDispatch.mock.calls[0][0].type).toBe(clearAction.type); 
-    expect(mockDispatch.mock.calls[1][0].type).toBe(logoutAction.type);
+    render(<Dashboard />);
+    const button = screen.getByText("Cerrar Sesión");
+    fireEvent.click(button);
+
+    expect(mockDispatch).toHaveBeenCalledWith(clearCdtState());
+    expect(mockDispatch).toHaveBeenCalledWith(logoutAuth());
   });
 });
+

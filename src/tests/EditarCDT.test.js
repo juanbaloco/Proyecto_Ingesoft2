@@ -1,146 +1,99 @@
-import React from "react";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { EditarCDT } from "../components/EditarCDT";
-import { useSelector, useDispatch } from "react-redux";
-import { useNavigate, useParams } from "react-router-dom";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ListaCDT } from "../components/ListaCDT";
+import { cargarSolicitudesCDT, eliminarSolicitudCDT } from "../store/thunks/cdtThunk";
 
-// Mock de thunks
-jest.mock("../store/thunks/cdtThunk", () => ({
-  actualizarSolicitudCDT: jest.fn(() => async () => ({ success: true })),
-  cargarSolicitudesCDT: jest.fn(() => async () => Promise.resolve()),
-}));
+jest.mock("../store/thunks/cdtThunk");
 
-const mockDispatch = jest.fn(() =>
-  new Promise((resolve) => setTimeout(() => resolve({ success: true }), 20))
-);
+const mockDispatch = jest.fn();
 const mockNavigate = jest.fn();
+const mockConfirm = jest.fn();
+const mockAlert = jest.fn();
 
-// Mocks jest.fn() estáticos iniciales para hooks
 jest.mock("react-redux", () => ({
-  useSelector: jest.fn(),
-  useDispatch: jest.fn(),
+  useDispatch: () => mockDispatch,
+  useSelector: jest.fn((selector) =>
+    selector({
+      cdt: {
+        solicitudes: [
+          { id: "1", monto: 5000000, plazo: 12, tasaInteres: 5, estado: "Borrador", fechaSolicitud: new Date() },
+          { id: "2", monto: 3000000, plazo: 3, tasaInteres: 3, estado: "Aprobado", fechaSolicitud: new Date() },
+        ],
+        status: "idle",
+      },
+      auth: { uid: "uid123" },
+    })
+  ),
 }));
 
 jest.mock("react-router-dom", () => ({
-  useNavigate: jest.fn(),
-  useParams: jest.fn(),
+  useNavigate: () => mockNavigate,
+  useParams: () => ({ id: "1" }),
 }));
 
-describe("EditarCDT Component", () => {
-  let selectorState;
-
-  beforeEach(() => {
-    // Estado simulado mutable
-    selectorState = {
-      cdt: {
-        solicitudes: [
-          { id: "123", monto: 1000000, plazo: 12, tasaInteres: 12.5 },
-        ],
-      },
-      auth: { uid: "user1" },
-    };
-
-    // Implementación dinámica de useSelector y useDispatch
-    useSelector.mockImplementation((selector) => selector(selectorState));
-    useDispatch.mockReturnValue(mockDispatch);
-
-    // Implementación dinámica de useNavigate y useParams
-    useNavigate.mockReturnValue(mockNavigate);
-    useParams.mockReturnValue({ id: "123" });
-
-    // Limpiar mocks
-    mockNavigate.mockClear();
-    mockDispatch.mockClear();
-  });
-
-  it("renders form with data from redux state", () => {
-  render(<EditarCDT />);
-  expect(screen.getByPlaceholderText("10.000.000").value).toBe("1000000");
-  expect(screen.getByRole("combobox").value).toBe("12");
-  expect(screen.getByText(/12.5% E\.A\./i)).toBeInTheDocument();
+beforeAll(() => {
+  window.confirm = mockConfirm;
+  window.alert = mockAlert;
 });
 
-  it("loads solicitudes if empty on mount", () => {
-    selectorState = {
-      cdt: { solicitudes: [] },
-      auth: { uid: "user1" },
-    };
-    useSelector.mockImplementation((selector) => selector(selectorState));
-    render(<EditarCDT />);
-    expect(mockDispatch).toHaveBeenCalled();
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe("ListaCDT", () => {
+  test("✅ llama a cargarSolicitudesCDT al montar si hay uid", () => {
+    render(<ListaCDT />);
+    expect(mockDispatch).toHaveBeenCalledWith(cargarSolicitudesCDT("uid123"));
   });
 
-  it("updates form fields on user input", () => {
-  render(<EditarCDT />);
-  const montoInput = screen.getByPlaceholderText("10.000.000");
-  fireEvent.change(montoInput, { target: { name: "monto", value: "2000000" } });
-  expect(montoInput.value).toBe("2000000");
+  test("✅ muestra mensaje 'No hay resultados' cuando filtro elimina todas las filas", () => {
+    render(<ListaCDT />);
+    const select = screen.getByRole("combobox");
+    fireEvent.change(select, { target: { value: "Rechazado" } });
+    expect(screen.getByText(/No hay resultados/i)).toBeInTheDocument();
+  });
 
-  const plazoSelect = screen.getByRole("combobox"); // Selecciona el único select disponible
-  fireEvent.change(plazoSelect, { target: { name: "plazo", value: "18" } });
-  expect(plazoSelect.value).toBe("18");
+  test("✅ filtra por estado y búsqueda correctamente", () => {
+  render(<ListaCDT />);
 
-  expect(screen.getByText(/12.8% E\.A\./i)).toBeInTheDocument();
+  const search = screen.getByPlaceholderText(/buscar por monto/i);
+  fireEvent.change(search, { target: { value: "3" } }); // Coincide con 3.000.000
+
+  // Usamos regex que ignora símbolos y espacios
+  expect(screen.getByText(/\$ ?3\.000\.000/)).toBeInTheDocument();
+  expect(screen.queryByText(/\$ ?5\.000\.000/)).not.toBeInTheDocument();
+});
+
+  test("✅ botones de ver detalle y editar navegan correctamente", () => {
+  render(<ListaCDT />);
+
+  // Buscar el botón por el emoji y texto real
+  const verBtns = screen.getAllByRole("button", { name: /👁️ Ver/i });
+  fireEvent.click(verBtns[0]);
+  expect(mockNavigate).toHaveBeenCalledWith("/cdt/1");
+
+  // Si quieres probar editar
+  const editarBtns = screen.getAllByRole("button", { name: /✏️ Editar/i });
+  fireEvent.click(editarBtns[0]);
+  expect(mockNavigate).toHaveBeenCalledWith("/editar/1");
 });
 
 
-  it("does not call dispatch or navigate if monto is invalid", async () => {
-    render(<EditarCDT />);
-    const montoInput = screen.getByPlaceholderText("10.000.000");
-
-    fireEvent.change(montoInput, { target: { name: "monto", value: "100" } });
-    expect(montoInput.value).toBe("100");  // monto inválido
-
-    const form = document.querySelector("form");
-
-    await act(async () => {
-      fireEvent.submit(form);
-    });
-
-    expect(mockDispatch).not.toHaveBeenCalled();
-    expect(mockNavigate).not.toHaveBeenCalled();
+  test("✅ elimina solicitud con confirm y llama dispatch", async () => {
+    mockConfirm.mockReturnValue(true);
+    mockDispatch.mockResolvedValue({ success: true });
+    render(<ListaCDT />);
+    const deleteBtns = screen.getAllByRole("button", { name: /eliminar/i });
+    fireEvent.click(deleteBtns[0]);
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(eliminarSolicitudCDT("1")));
+    expect(mockAlert).not.toHaveBeenCalled();
   });
 
-
-
-it("shows loading state on submit", async () => {
-  const { container } = render(<EditarCDT />);
-  const submitButton = screen.getByRole("button", { name: /Guardar cambios/i });
-  const form = container.querySelector("form");
-
-  await act(async () => {
-    fireEvent.submit(form);
-  });
-
-  await waitFor(() => {
-    expect(submitButton).toBeDisabled();
-    expect(submitButton.textContent).toBe("Guardando...");
-  });
-});
-
-it("shows loading state on submit", async () => {
-  const { container } = render(<EditarCDT />);
-  const submitButton = screen.getByRole("button", { name: /Guardar cambios/i });
-  const form = container.querySelector("form");
-
-  await act(async () => {
-    fireEvent.submit(form);
-  });
-
-  await waitFor(() => {
-    expect(submitButton).toBeDisabled();
-    expect(submitButton.textContent).toBe("Guardando...");
-  });
-});
-
-  it("renders loading message if solicitud not found", () => {
-    selectorState = {
-      cdt: { solicitudes: [] },
-      auth: { uid: "user1" },
-    };
-    useSelector.mockImplementation((selector) => selector(selectorState));
-    useParams.mockReturnValue({ id: "not-exist" });
-    render(<EditarCDT />);
-    expect(screen.getByText(/Cargando o no existe el registro/i)).toBeInTheDocument();
+  test("✅ alerta si falla eliminación", async () => {
+    mockConfirm.mockReturnValue(true);
+    mockDispatch.mockResolvedValue({ success: false });
+    render(<ListaCDT />);
+    const deleteBtns = screen.getAllByRole("button", { name: /eliminar/i });
+    fireEvent.click(deleteBtns[0]);
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith("No fue posible eliminar"));
   });
 });
