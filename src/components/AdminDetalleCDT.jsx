@@ -72,7 +72,6 @@ export const AdminDetalleCDT = () => {
       maximumFractionDigits: 0,
     }).format(valor || 0);
 
-  // ✅ CORREGIDO: Usar toLocaleString en vez de toLocaleDateString
   const formatFecha = (fecha) => {
     if (!fecha) return "-";
     try {
