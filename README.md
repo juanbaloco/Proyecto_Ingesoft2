@@ -48,7 +48,6 @@ npm test          # Ejecutar pruebas unitarias con Jest y cobertura
 npm run e2etest   # Ejecutar pruebas end-to-end con Playwright
 npm run lint      # Verificar código con ESLint
 npm run lint:fix  # Corregir problemas de código automáticamente
-npm test          # Ver cobertura de pruebas
 ```
 
 ---
