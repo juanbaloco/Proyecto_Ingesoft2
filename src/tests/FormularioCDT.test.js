@@ -434,4 +434,61 @@ expect(montosCero.length).toBeGreaterThan(0); // Al menos uno existe
       expect(screen.getByText('Error de conexión')).toBeInTheDocument();
     });
   });
+  test('debe calcular correctamente el resumen con monto cero', () => {
+    renderWithProviders(<FormularioCDT />);
+    const montos = screen.getAllByText(/\$\s?0/);
+    expect(montos.length).toBeGreaterThan(0);
+  });
+
+  test('botón Borrar selección limpia los campos', () => {
+    renderWithProviders(<FormularioCDT />);
+    const productoSelect = screen.getAllByRole('combobox')[0];
+    const montoInput = screen.getByPlaceholderText('10.000.000');
+    const plazoSelect = screen.getAllByRole('combobox')[1];
+
+    fireEvent.change(productoSelect, { target: { value: 'tradicional' } });
+    fireEvent.change(montoInput, { target: { value: '5000000' } });
+    fireEvent.change(plazoSelect, { target: { value: '12' } });
+
+    const borrarButton = screen.getByRole('button', { name: /Borrar Selección/i });
+    fireEvent.click(borrarButton);
+
+    expect(productoSelect.value).toBe('');
+    expect(montoInput.value).toBe('');
+    expect(plazoSelect.value).toBe('');
+  });
+
+  test('resumen se actualiza correctamente al ingresar datos', async () => {
+  renderWithProviders(<FormularioCDT />);
+
+  const productoSelect = screen.getAllByRole('combobox')[0];
+  const montoInput = screen.getByPlaceholderText('10.000.000');
+  const plazoSelect = screen.getAllByRole('combobox')[1];
+
+  fireEvent.change(productoSelect, { target: { value: 'tradicional' } });
+  fireEvent.change(montoInput, { target: { value: '10000000' } });
+  fireEvent.change(plazoSelect, { target: { value: '12' } });
+
+  await waitFor(() => {
+    // Buscar "Total al vencimiento" por título
+    const totalTitle = screen.getByText('Total al vencimiento');
+    // El siguiente div está justo después del título
+    const totalValue = totalTitle.nextElementSibling;
+    expect(totalValue).toHaveTextContent('$ 11.250.000');
+
+    const montoSolicitado = screen.getByText('Monto solicitado').nextElementSibling;
+    expect(montoSolicitado).toHaveTextContent('$ 10.000.000');
+
+    const interesesEstimados = screen.getByText('Intereses estimados').nextElementSibling;
+    expect(interesesEstimados).toHaveTextContent('$ 1.250.000');
+
+    const plazo = screen.getByText('Plazo').nextElementSibling;
+    expect(plazo).toHaveTextContent('12 meses');
+
+    const tasa = screen.getByText('Tasa de interés').nextElementSibling;
+    expect(tasa).toHaveTextContent('12.5% E.A.');
+  });
 });
+
+});
+  
