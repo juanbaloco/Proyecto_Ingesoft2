@@ -57,7 +57,7 @@ export const AdminListaCDT = () => {
         actualizarEstadoSolicitudAdmin(solicitud.userId, solicitud.id, nuevoEstado)
       );
 
-      if (resultado.success) {
+      if (resultado.payload?.success) {
         const mensajes = {
           "APROBADA": "La solicitud ha sido aprobada correctamente.",
           "RECHAZADA": "La solicitud ha sido rechazada correctamente.",
@@ -71,18 +71,20 @@ export const AdminListaCDT = () => {
   };
 
   const handleCancelar = async (solicitud) => {
-    if (window.confirm("¿Está seguro de cancelar esta solicitud?")) {
-      const resultado = await dispatch(
-        actualizarEstadoSolicitudAdmin(solicitud.userId, solicitud.id, "CANCELADA")
-      );
+  if (window.confirm("¿Está seguro de cancelar esta solicitud?")) {
+    const resultado = await dispatch(
+      actualizarEstadoSolicitudAdmin(solicitud.userId, solicitud.id, "CANCELADA")
+    );
 
-      if (resultado.success) {
-        alert("La solicitud ha sido cancelada correctamente.");
-      } else {
-        alert("No se pudo cancelar la solicitud.");
-      }
+    // acceder al payload
+    if (resultado.payload?.success) {
+      alert("La solicitud ha sido cancelada correctamente.");
+    } else {
+      alert("No se pudo cancelar la solicitud.");
     }
-  };
+  }
+};
+
 
   const handleEliminar = async (solicitud) => {
     if (window.confirm("¿Está seguro de eliminar permanentemente esta solicitud? Esta acción no se puede deshacer.")) {
