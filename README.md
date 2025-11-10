@@ -234,5 +234,31 @@ Time:        2.931 s
 | **Total** | **16** | **✅** |
 
 ---
+## Análisis de Calidad de Código
+
+El siguiente análisis fue generado usando **SonarQube** para el proyecto:
+### Resumen de métricas
+
+| Métrica                | Valor                  | Calificación |
+|------------------------|-----------------------|-------------|
+| **Seguridad**           | 0 problemas abiertos   | A           |
+| **Confiabilidad**       | 17 problemas abiertos  | C           |
+| **Mantenibilidad**      | 14 problemas abiertos  | A           |
+| **Cobertura de pruebas**| 29.3% (sobre 1.9k líneas) | Bajo    |
+| **Duplicaciones**       | 5.0% (sobre 7.3k líneas) |  Medio  |
+| **Puntos críticos de seguridad** | 9                  | E           |
+| **Problemas aceptados** | 0                     | ⏱          |
+|**Problemas Criticos**   | 0                     | A           |
+|**Problemas Bloqueantes**| 0                     | A            |
+
+
+
+
+
+![Imagen de WhatsApp 2025-11-10 a las 07 49 45_bc6cc133](https://github.com/user-attachments/assets/f261ef8e-22e6-40b7-9bda-5b4aa53cae5d)
+<img width="329" height="329" alt="image" src="https://github.com/user-attachments/assets/c7f1061d-a608-44cf-8d78-bb242a19815a" />
+
+
+
 
 **Última actualización**: Noviembre 2025
