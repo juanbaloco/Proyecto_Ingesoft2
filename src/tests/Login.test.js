@@ -1,61 +1,169 @@
-/**
- * Crea una función de prueba que simula el entorno de validateForm.
- * @param {object} initialFormState - El estado inicial de email y password.
- * @returns {object} Contiene validateForm para ejecutar y getErrors para leer los errores.
- 
- */
-global.fetch = jest.fn(() =>
-  Promise.resolve({
-    json: () => Promise.resolve({}),
-    ok: true,
-  })
-);
+// Login.test.jsx
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { Login } from "../components/login";
+import { useDispatch, useSelector } from "react-redux";
+import { loginWithEmailAndPassword } from "../store/thunks/loginAuth";
+import { loginWithGoogle } from "../store/thunks/loginGoogle";
+import { MemoryRouter } from "react-router-dom";
 
-import { describe, test, expect } from '@jest/globals';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Login } from '../components/Login';
-const createValidateFormTester = (initialFormState) => {
-  const { email, password } = initialFormState;
-  let currentErrors = {};
+// Mock de Redux
+jest.mock("react-redux", () => ({
+  useDispatch: jest.fn(),
+  useSelector: jest.fn(),
+}));
 
-  const setErrors = (errors) => {
-    currentErrors = errors;
-  };
+// Mock de thunks
+jest.mock("../store/thunks/loginAuth", () => ({
+  loginWithEmailAndPassword: jest.fn(),
+}));
 
-  const validateForm = () => {
-    const newErrors = {};
+jest.mock("../store/thunks/loginGoogle", () => ({
+  loginWithGoogle: jest.fn(),
+}));
 
-    if (!email.trim()) {
-      newErrors.email = "El correo es requerido";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "El correo no es válido";
-    }
+// Mock de useNavigate
+const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useNavigate: () => mockNavigate,
+  Link: ({ children, to }) => <a href={to}>{children}</a>,
+}));
 
-    if (!password) {
-      newErrors.password = "La contraseña es requerida";
-    } else if (password.length < 6) {
-      newErrors.password = "La contraseña debe tener al menos 6 caracteres";
-    }
+describe("Login Component", () => {
+  let mockDispatch;
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  beforeEach(() => {
+    mockDispatch = jest.fn(() => Promise.resolve());
+    useDispatch.mockReturnValue(mockDispatch);
+    useSelector.mockReturnValue({ status: "not-authenticated" });
+  });
 
-  return { validateForm, getErrors: () => currentErrors };
-};
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-describe('validateForm', () => {
+  test("Renderiza correctamente inputs, botones y enlaces", () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
 
-  test('debe retornar true y no establecer errores si el email y password son válidos', () => {
-    const formState = {
-      email: "test@example.com",
-      password: "securepassword123",
-    };
-    const { validateForm, getErrors } = createValidateFormTester(formState);
+    expect(screen.getByLabelText(/Correo electrónico/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Contraseña/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Entrar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Iniciar con Google/i })).toBeInTheDocument();
+    expect(screen.getByText(/Regístrate aquí/i)).toHaveAttribute("href", "/registro");
+  });
 
-    const isValid = validateForm();
+  test("Muestra errores de validación en campos vacíos", async () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
 
-    expect(isValid).toBe(true);
-    expect(getErrors()).toEqual({});
+    fireEvent.click(screen.getByRole("button", { name: /Entrar/i }));
+
+    expect(await screen.findByText(/El correo es requerido/i)).toBeInTheDocument();
+    expect(await screen.findByText(/La contraseña es requerida/i)).toBeInTheDocument();
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  test("Muestra error de correo inválido y contraseña corta", async () => {
+  render(
+    <MemoryRouter>
+      <Login />
+    </MemoryRouter>
+  );
+
+  // Cambiamos los inputs
+  fireEvent.change(screen.getByLabelText(/Correo electrónico/i), {
+    target: { value: "correo-invalido" },
+  });
+
+  fireEvent.change(screen.getByLabelText(/Contraseña/i), {
+    target: { value: "123" },
+  });
+
+  // Hacemos submit
+  fireEvent.submit(screen.getByRole("button", { name: /Entrar/i }));
+
+  // Esperamos a que los spans de error aparezcan
+  expect(await screen.findByText("El correo no es válido")).toBeInTheDocument();
+  expect(await screen.findByText("La contraseña debe tener al menos 6 caracteres")).toBeInTheDocument();
+
+  expect(mockDispatch).not.toHaveBeenCalled();
+});
+
+
+  test("Llama dispatch loginWithEmailAndPassword correctamente", async () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Correo electrónico/i), {
+      target: { value: "test@example.com" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/Contraseña/i), {
+      target: { value: "123456" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Entrar/i }));
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(
+        loginWithEmailAndPassword("test@example.com", "123456")
+      );
+    });
+  });
+
+  test("Muestra error si loginWithEmailAndPassword falla", async () => {
+    mockDispatch.mockImplementation(() => Promise.reject());
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Correo electrónico/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/Contraseña/i), {
+      target: { value: "123456" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Entrar/i }));
+
+    expect(await screen.findByText(/Correo o contraseña incorrectos/i)).toBeInTheDocument();
+  });
+
+  test("Llama dispatch loginWithGoogle correctamente", async () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Iniciar con Google/i }));
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(loginWithGoogle());
+    });
+  });
+
+  test("Navega a /dashboard si status es authenticated", () => {
+    useSelector.mockReturnValue({ status: "authenticated" });
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
   });
 });
