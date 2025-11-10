@@ -12,14 +12,14 @@
     "test": "jest --coverage",
     "e2etest": "playwright test"
   },
-  
   "dependencies": {
     "@reduxjs/toolkit": "^2.9.0",
     "firebase": "^12.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-redux": "^9.2.0",
-    "react-router-dom": "^7.9.4"
+    "react-router-dom": "^7.9.4",
+    "redux-mock-store": "^1.5.5"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
