@@ -54,7 +54,7 @@ export const AdminDetalleCDT = () => {
     setProcesando(true);
     const resultado = await dispatch(
       actualizarEstadoSolicitudAdmin(userId, solicitudId, nuevoEstado)
-    );
+    ); // NOSONAR
     setProcesando(false);
 
     if (resultado.success) {

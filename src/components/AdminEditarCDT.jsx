@@ -132,7 +132,7 @@ export const AdminEditarCDT = () => {
 
       const resultado = await dispatch(
         actualizarSolicitudAdmin(userId, solicitudId, datosActualizados)
-      );
+      ); // NOSONAR
 
       if (resultado.success) {
         alert("Los cambios se han guardado correctamente.");

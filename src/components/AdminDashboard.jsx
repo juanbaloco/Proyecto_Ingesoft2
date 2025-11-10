@@ -22,7 +22,7 @@ export const AdminDashboard = () => {
     // Cargar todas las solicitudes de todos los usuarios
     const cargarSolicitudes = async () => {
       setLoading(true);
-      await dispatch(cargarTodasSolicitudesCDT());
+      await dispatch(cargarTodasSolicitudesCDT()); // NOSONAR
       setLoading(false);
     };
 

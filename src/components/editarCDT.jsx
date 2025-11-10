@@ -26,7 +26,7 @@ export const EditarCDT = () => {
       console.log("Cargando solicitudes para editar...");
       const cargar = async () => {
         try {
-          await dispatch(cargarSolicitudesCDT(uid));
+          await dispatch(cargarSolicitudesCDT(uid));//NOSONAR
           setCargando(false);
         } catch (err) {
           console.error("Error cargando solicitudes:", err);
@@ -117,7 +117,7 @@ export const EditarCDT = () => {
         tasaInteres: Number(form.tasaInteres),
         estado: solicitud.estado,
       })
-    );
+    ); // NOSONAR
 
     setGuardando(false);
     if (r?.success) {

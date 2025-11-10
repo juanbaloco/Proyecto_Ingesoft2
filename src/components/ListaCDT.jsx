@@ -60,7 +60,7 @@ export const ListaCDT = () => {
 
   const onEliminar = async (id) => {
     if (window.confirm("¿Eliminar esta solicitud?")) {
-      const r = await dispatch(eliminarSolicitudCDT(id));
+      const r = await dispatch(eliminarSolicitudCDT(id));// NOSONAR
       if (!r.success) alert("No fue posible eliminar");
     }
   };

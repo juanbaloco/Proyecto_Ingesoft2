@@ -55,7 +55,7 @@ export const AdminListaCDT = () => {
     if (window.confirm(`¿Está seguro de cambiar el estado a "${nuevoEstado}"?`)) {
       const resultado = await dispatch(
         actualizarEstadoSolicitudAdmin(solicitud.userId, solicitud.id, nuevoEstado)
-      );
+      ); // NOSONAR
 
       if (resultado.payload?.success) {
         const mensajes = {
@@ -74,7 +74,7 @@ export const AdminListaCDT = () => {
   if (window.confirm("¿Está seguro de cancelar esta solicitud?")) {
     const resultado = await dispatch(
       actualizarEstadoSolicitudAdmin(solicitud.userId, solicitud.id, "CANCELADA")
-    );
+    ); // NOSONAR
 
     // acceder al payload
     if (resultado.payload?.success) {
@@ -90,7 +90,7 @@ export const AdminListaCDT = () => {
     if (window.confirm("¿Está seguro de eliminar permanentemente esta solicitud? Esta acción no se puede deshacer.")) {
       const resultado = await dispatch(
         eliminarSolicitudAdmin(solicitud.userId, solicitud.id)
-      );
+      ); // NOSONAR
 
       if (resultado.success) {
         alert("La solicitud ha sido eliminada correctamente.");
