@@ -1,0 +1,6 @@
+projectKey=NeoCDT
+serverUrl=http://localhost:9000
+serverVersion=25.10.0.114319
+dashboardUrl=http://localhost:9000/dashboard?id=NeoCDT
+ceTaskId=0251f121-974b-440a-afdf-e473df0d8a31
+ceTaskUrl=http://localhost:9000/api/ce/task?id=0251f121-974b-440a-afdf-e473df0d8a31
